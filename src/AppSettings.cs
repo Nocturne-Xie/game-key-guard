@@ -35,9 +35,32 @@ namespace GameKeyGuard
         public static string LogPath { get { return Path.Combine(Dir, "error.log"); } }
         public static string KeysLogPath { get { return Path.Combine(Dir, "keys.log"); } }
 
+        /// <summary>优先写 exe 同目录（方便查看），不可写时退回 %APPDATA%。</summary>
+        public static string SideLogPath
+        {
+            get
+            {
+                try
+                {
+                    string exe = System.Diagnostics.Process.GetCurrentProcess().MainModule.FileName;
+                    string dir = Path.GetDirectoryName(exe);
+                    string p = Path.Combine(dir, "GameKeyGuard.log");
+                    File.AppendAllText(p, "");
+                    return p;
+                }
+                catch { return KeysLogPath; }
+            }
+        }
+
         public static void Note(string s)
         {
-            try { File.AppendAllText(KeysLogPath, DateTime.Now.ToString("MM-dd HH:mm:ss") + "  " + s + Environment.NewLine); }
+            string line = DateTime.Now.ToString("MM-dd HH:mm:ss") + "  " + s + Environment.NewLine;
+            try { File.AppendAllText(KeysLogPath, line); } catch { }
+            try
+            {
+                string side = SideLogPath;
+                if (side != KeysLogPath) File.AppendAllText(side, line);
+            }
             catch { }
         }
 

@@ -12,6 +12,7 @@ namespace GameKeyGuard
 {
     public class MainForm : Form
     {
+        public const string AppVersion = "1.2.0";
         public const int WM_SHOWME = 0x8001;
         private const int WM_NCLBUTTONDOWN = 0xA1;
         private const int HTCAPTION = 0x2;
@@ -22,6 +23,16 @@ namespace GameKeyGuard
         private static extern IntPtr SendMessage(IntPtr hWnd, int msg, int wParam, int lParam);
         [DllImport("user32.dll")]
         private static extern void keybd_event(byte bVk, byte bScan, uint dwFlags, UIntPtr dwExtraInfo);
+        [DllImport("user32.dll")]
+        private static extern IntPtr GetForegroundWindow();
+        [DllImport("user32.dll")]
+        private static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
+        [DllImport("user32.dll")]
+        private static extern bool PostMessage(IntPtr hWnd, uint Msg, IntPtr wParam, IntPtr lParam);
+        [DllImport("user32.dll")]
+        private static extern bool IsIconic(IntPtr hWnd);
+        [DllImport("user32.dll")]
+        private static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint pid);
 
         private AppSettings _s;
         private KeyboardGuard _guard = new KeyboardGuard();
@@ -56,7 +67,7 @@ namespace GameKeyGuard
             ApplySettings();
             if (!headless)
             {
-                AppSettings.Note("app start; custom=" + DumpCustom());
+                AppSettings.Note("app start v" + AppVersion + "; custom=" + DumpCustom());
             }
         }
 
@@ -138,6 +149,8 @@ namespace GameKeyGuard
                 _guard.ResyncModifiers();
                 if (_locked) FlushKeyLog();
                 if (_locked && _guard.TakePanic()) BackToDesktop();
+                CheckPendingMinimize();
+                TickFlash();
             };
 
             Panel bar = new Panel();
@@ -151,10 +164,20 @@ namespace GameKeyGuard
             title.Font = Theme.FTitle;
             title.ForeColor = Theme.Text;
             title.BackColor = Theme.Bg;
-            title.Bounds = new Rectangle(padX, P(11), P(240), P(26));
+            title.Bounds = new Rectangle(padX, P(11), P(162), P(26));
             title.TextAlign = ContentAlignment.MiddleLeft;
             title.MouseDown += DragStart;
             bar.Controls.Add(title);
+
+            Label ver = new Label();
+            ver.Text = "v" + AppVersion;
+            ver.Font = Theme.FSmall;
+            ver.ForeColor = Theme.Muted;
+            ver.BackColor = Theme.Bg;
+            ver.Bounds = new Rectangle(padX + P(160), P(14), P(70), P(20));
+            ver.TextAlign = ContentAlignment.MiddleLeft;
+            ver.MouseDown += DragStart;
+            bar.Controls.Add(ver);
 
             _tip = new ToolTip();
 
@@ -259,12 +282,73 @@ namespace GameKeyGuard
             }
         }
 
+        private IntPtr _pendingHwnd = IntPtr.Zero;
+        private DateTime _pendingAt = DateTime.MinValue;
+        private DateTime _panicCooldown = DateTime.MinValue;
+
         private void BackToDesktop()
         {
             // 只把桌面调出来，游戏模式（钩子拦截）保持开启。
-            // 注入的按键带 LLKHF_INJECTED 标记，本程序自己的钩子会放行，所以无需解除锁定。
-            AppSettings.Note("panic hotkey: show desktop (still locked)");
+            if (DateTime.Now < _panicCooldown) return;      // 防抖：2 秒内只执行一次
+            _panicCooldown = DateTime.Now.AddSeconds(2);
+
+            IntPtr fg = IntPtr.Zero;
+            try
+            {
+                fg = GetForegroundWindow();
+                uint pid;
+                GetWindowThreadProcessId(fg, out pid);
+                if (pid == (uint)Process.GetCurrentProcess().Id) fg = IntPtr.Zero;
+            }
+            catch { fg = IntPtr.Zero; }
+
+            // 先走系统标准路径：Win+D（由 shell 用正规消息最小化窗口，不破坏全屏程序状态）
+            _pendingHwnd = fg;
+            _pendingAt = DateTime.Now.AddMilliseconds(400);
+            AppSettings.Note("panic hotkey: back to desktop");
             SendWinD();
+            FlashStatus("已回桌面 · 游戏模式仍开启");
+        }
+
+        private void CheckPendingMinimize()
+        {
+            if (_pendingHwnd == IntPtr.Zero || DateTime.Now < _pendingAt) return;
+            IntPtr hwnd = _pendingHwnd;
+            _pendingHwnd = IntPtr.Zero;
+            try
+            {
+                // 只有 Win+D 没生效（游戏还占着前台）才兜底。
+                // 用标准的 SC_MINIMIZE 消息，让程序自己处理最小化；
+                // 绝不能用 ShowWindow 硬改窗口状态，否则全屏程序恢复时容易黑屏/卡死。
+                if (GetForegroundWindow() == hwnd && !IsIconic(hwnd))
+                {
+                    PostMessage(hwnd, 0x0112, (IntPtr)0xF020, IntPtr.Zero);
+                    AppSettings.Note("fallback: SC_MINIMIZE sent");
+                }
+            }
+            catch { }
+        }
+
+        private string _flashText = "";
+        private DateTime _flashUntil = DateTime.MinValue;
+
+        private void FlashStatus(string text)
+        {
+            _flashText = text;
+            _flashUntil = DateTime.Now.AddSeconds(3);
+            _card.Sub = text;
+            _card.Dot = Theme.Green;
+            _card.Invalidate();
+        }
+
+        private void TickFlash()
+        {
+            if (_flashUntil == DateTime.MinValue) return;
+            if (DateTime.Now >= _flashUntil)
+            {
+                _flashUntil = DateTime.MinValue;
+                RefreshCard();
+            }
         }
 
         private static void SendWinD()
@@ -601,7 +685,7 @@ namespace GameKeyGuard
         {
             if (_tray == null) return;
             _tray.Icon = _locked ? _icoOn : _icoOff;
-            _tray.Text = _locked ? "游戏快捷键锁 · 已锁定" : "游戏快捷键锁 · 未启用";
+            _tray.Text = "游戏快捷键锁 v" + AppVersion + (_locked ? " · 已锁定" : " · 未启用");
         }
 
         private void RestartAsAdmin()

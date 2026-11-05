@@ -1,5 +1,7 @@
 ﻿# 游戏快捷键锁 · GameKeyGuard
 
+> 当前版本 **v1.2.0**
+
 > 玩游戏时把 Win 键、Alt+Tab 这些「一按就切出去」的系统快捷键拦下来。
 > A tiny Windows utility that blocks system shortcuts (Win / Alt+Tab / Alt+F4 / Ctrl+Esc …) while gaming.
 
@@ -54,8 +56,8 @@
 3. **游戏自带的方法**：CS2 里按 `Alt + Enter` 可以切到窗口模式（这个键没有被拦），再点任务栏回桌面。
    也可以把游戏设成「全屏窗口化」，这样悬浮球和主界面更容易看到。
 
-> **原理**：`Win + Enter` 是本程序在拦截规则之外单独识别的一条热键。识别到之后，程序用 **注入按键** 的方式替你按一次 `Win + D`；
-> 注入的按键带 `LLKHF_INJECTED` 标记，本程序的钩子会放行，所以不需要解除锁定就能把桌面调出来。
+> **原理**：`Win + Enter` 是本程序在拦截规则之外单独识别的一条热键。识别到之后，程序**先发送系统标准的 `Win + D`**（由 shell 用正规消息最小化窗口，不破坏全屏程序状态）；
+> 若 400ms 后游戏仍占着前台，再发送 **`SC_MINIMIZE`** 让它自己最小化（绝不硬改窗口状态，否则恢复时容易黑屏）。另带 2 秒防抖，长按不会重复执行。
 > 想真正结束游戏模式，仍然要点主界面的红色按钮，或托盘菜单的「结束游戏模式」。
 
 ## 已知限制（不是 bug）
@@ -77,7 +79,7 @@
 # 在仓库根目录执行
 powershell -ExecutionPolicy Bypass -File .\build.ps1          # 只编译
 powershell -ExecutionPolicy Bypass -File .\build.ps1 -Test    # 编译 + 编译自检程序
-.\_selftest.exe                                               # 运行自检（40 项断言）
+.\_selftest.exe                                               # 运行自检（44 项断言）
 ```
 
 `build.ps1` 会调用 `gen_icon.ps1` 生成多尺寸图标，然后用 `%WINDIR%\Microsoft.NET\Framework64\v4.0.30319\csc.exe`
@@ -95,7 +97,7 @@ powershell -ExecutionPolicy Bypass -File .\build.ps1 -Test    # 编译 + 编译�
 │  ├─ Controls.cs / Theme.cs / TrayIcons.cs   自绘控件与主题
 │  └─ AppSettings.cs    配置读写
 ├─ tests\
-│  ├─ TestMain.cs       40 项自动化断言
+│  ├─ TestMain.cs       44 项自动化断言
 │  └─ HookProbe.cs      端到端按键注入测试（需在真实桌面运行）
 ├─ build.ps1            一键编译
 ├─ gen_icon.ps1         生成多尺寸 ico
