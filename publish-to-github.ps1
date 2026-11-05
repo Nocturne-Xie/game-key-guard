@@ -3,7 +3,7 @@
 # 说明：这里故意不用 $ErrorActionPreference='Stop'，因为 git 的提示信息走 stderr，
 #       在 PowerShell 5.1 里会被当成致命错误，导致脚本中途退出。
 
-$RepoUrl = 'https://github.com/xiangjiaoqiu/game-key-guard.git'
+$RepoUrl = 'https://github.com/Nocturne-Xie/game-key-guard.git'
 $Branch  = 'main'
 Set-Location -LiteralPath $PSScriptRoot
 
@@ -43,8 +43,8 @@ if (-not (Test-Path $gitDir)) {
     if ($LASTEXITCODE -ne 0) { & $git init > $null 2>&1 }
     Dim "    已初始化本地仓库（分支 $Branch）。"
 }
-& $git config user.name  'xiangjiaoqiu' > $null 2>&1
-& $git config user.email 'xiangjiaoqiu@users.noreply.github.com' > $null 2>&1
+& $git config user.name  'Nocturne-Xie' > $null 2>&1
+& $git config user.email '328263129+Nocturne-Xie@users.noreply.github.com' > $null 2>&1
 
 # ---------- 2/5 暂存 ----------
 Info "[2/5] 暂存文件 ..."
@@ -81,7 +81,7 @@ if ($LASTEXITCODE -ne 0) {
     exit 1
 }
 
-Ok "`n发布成功！仓库地址: https://github.com/xiangjiaoqiu/game-key-guard"
+Ok "`n发布成功！仓库地址: https://github.com/Nocturne-Xie/game-key-guard"
 Info "`n本次推送的文件："
 & $git ls-files | ForEach-Object { Dim ("    " + $_) }
 Write-Host ""
